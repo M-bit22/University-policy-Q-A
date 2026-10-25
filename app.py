@@ -1,5 +1,6 @@
 import io
 import os
+import time
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -10,98 +11,249 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
-# ----------------------------------------------------------------------------
-# Page setup + styling
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Page setup
+# ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="UniHelp | University Policy Assistant",
+    page_title="UniHelp | University Knowledge Assistant",
     page_icon="🎓",
-    layout="centered",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
+# Keep all theme CSS in ONE stylesheet. Do not add another closing </style>.
 st.markdown(
     """
-<style>
-    .block-container { padding-top: 2rem; max-width: 860px; }
+    <style>
+    :root {
+        --uh-bg: #0B0D14;
+        --uh-sidebar: #10131D;
+        --uh-surface: #141824;
+        --uh-raised: #191E2B;
+        --uh-text: #F1F3FA;
+        --uh-muted: #A1A9BC;
+        --uh-border: #292F40;
+        --uh-primary: #A394FF;
+        --uh-primary-hover: #B7AAFF;
+        --uh-soft: #211D38;
+    }
+
+    html, body, .stApp, [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+        background: var(--uh-bg) !important;
+        color: var(--uh-text) !important;
+    }
+    [data-testid="stHeader"] { background: rgba(11,13,20,.96) !important; }
+    [data-testid="stToolbar"] { background: transparent !important; }
     #MainMenu, footer { visibility: hidden; }
+    .block-container { max-width: 1440px; padding: 2rem 3rem 4rem; }
 
-    .hero {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #db2777 100%);
-        border-radius: 18px;
-        padding: 2rem 2rem 1.6rem 2rem;
-        color: #fff;
-        margin-bottom: 1.2rem;
-        box-shadow: 0 10px 30px rgba(79, 70, 229, 0.35);
+    h1, h2, h3, h4, h5, h6, p, label, li, small { color: var(--uh-text); }
+    .stMarkdown, .stMarkdown p, .stMarkdown li {
+        color: var(--uh-text);
+        line-height: 1.75;
     }
-    .hero h1 { margin: 0; font-size: 2.1rem; font-weight: 800; color: #fff; }
-    .hero p  { margin: .4rem 0 0 0; font-size: 1.02rem; opacity: .92; }
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p { color: var(--uh-muted) !important; }
 
-    .stat-row { display: flex; gap: .8rem; margin: .4rem 0 1rem 0; }
-    .stat {
-        flex: 1; text-align: center; padding: .8rem .5rem;
-        border-radius: 14px;
-        background: rgba(124, 58, 237, 0.10);
-        border: 1px solid rgba(124, 58, 237, 0.30);
+    [data-testid="stSidebar"],
+    [data-testid="stSidebar"] > div:first-child {
+        background: var(--uh-sidebar) !important;
+        color: var(--uh-text) !important;
     }
-    .stat b { display: block; font-size: 1.5rem; }
-    .stat span { font-size: .78rem; opacity: .75; letter-spacing: .04em; text-transform: uppercase; }
+    [data-testid="stSidebar"] { border-right: 1px solid var(--uh-border); }
+    [data-testid="stSidebar"] > div:first-child { padding: 1.5rem 1rem; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 { color: var(--uh-text) !important; }
+    hr, [data-testid="stSidebar"] hr { border-color: var(--uh-border) !important; }
+
+    .uh-brand { display:flex; align-items:center; gap:12px; margin-bottom:2rem; }
+    .uh-brand-icon {
+        display:flex; align-items:center; justify-content:center;
+        width:46px; height:46px; border-radius:15px;
+        background:var(--uh-soft); border:1px solid #39315D; font-size:24px;
+    }
+    .uh-brand-name {
+        font-size:1.35rem; font-weight:800; letter-spacing:-.05em;
+        color:var(--uh-text) !important;
+    }
+    .uh-brand-caption { font-size:.78rem; color:var(--uh-muted) !important; margin-top:2px; }
+
+    .uh-hero {
+        padding:2.5rem; border:1px solid #343052; border-radius:24px;
+        background:
+          radial-gradient(ellipse at 100% 0%, rgba(125,102,255,.17), transparent 45%),
+          linear-gradient(135deg,#171A28 0%,#121522 100%) !important;
+        margin:0 0 1.5rem; box-shadow:0 18px 60px rgba(0,0,0,.12);
+    }
+    .uh-eyebrow {
+        color:var(--uh-primary) !important; font-size:.75rem; font-weight:750;
+        letter-spacing:.12em; text-transform:uppercase; margin-bottom:.85rem;
+    }
+    .uh-hero h1 {
+        font-size:clamp(2rem,4vw,3.15rem); line-height:1.12; font-weight:800;
+        letter-spacing:-.045em; margin:0 0 .85rem; color:#F5F4FF !important;
+    }
+    .uh-hero p { max-width:680px; color:#B4BCD0 !important; font-size:1.02rem; margin:0; }
+
+    .uh-document {
+        display:flex; align-items:center; gap:14px; padding:1rem 1.15rem;
+        background:var(--uh-surface) !important; border:1px solid var(--uh-border);
+        border-radius:16px; margin:1rem 0 1.5rem; color:var(--uh-text) !important;
+    }
+    .uh-document-icon {
+        width:46px; height:46px; flex-shrink:0; display:flex; align-items:center;
+        justify-content:center; border-radius:13px; background:var(--uh-soft); font-size:23px;
+    }
+    .uh-document-name { color:var(--uh-text) !important; font-weight:700; overflow-wrap:anywhere; }
+    .uh-document-caption { font-size:.82rem; color:var(--uh-muted) !important; margin-top:3px; }
+
+    [data-testid="stChatMessage"] {
+        background:var(--uh-surface) !important; border:1px solid var(--uh-border);
+        border-radius:18px; padding:1.1rem 1.25rem; margin-bottom:1rem;
+        color:var(--uh-text) !important;
+    }
+    [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"],
+    [data-testid="stChatMessage"] p,
+    [data-testid="stChatMessage"] li { color:var(--uh-text) !important; }
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+        background:#1C1B30 !important; border-color:#39315D;
+    }
+
+    .stTextInput input, .stTextArea textarea, .stNumberInput input,
+    [data-testid="stChatInput"] textarea {
+        background:#171B27 !important; color:var(--uh-text) !important;
+        border:1px solid #343B50 !important; border-radius:12px !important;
+        caret-color:var(--uh-primary);
+    }
+    .stTextInput input::placeholder, .stTextArea textarea::placeholder,
+    [data-testid="stChatInput"] textarea::placeholder { color:#8992A8 !important; }
+    [data-testid="stChatInput"] {
+        background:#171B27 !important; border:1px solid #343B50 !important;
+        border-radius:16px !important;
+    }
+    [data-testid="stChatInput"] button { color:var(--uh-primary) !important; }
+
+    [data-baseweb="select"] > div {
+        background:#171B27 !important; border-color:#343B50 !important;
+        color:var(--uh-text) !important;
+    }
+    [data-baseweb="select"] input, [data-baseweb="select"] span { color:var(--uh-text) !important; }
+    [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
+        background:#191E2B !important; color:var(--uh-text) !important;
+    }
+    [role="option"] { color:var(--uh-text) !important; }
+    [role="option"]:hover { background:#292641 !important; }
+
+    .stButton > button {
+        min-height:44px; border-radius:12px; border:1px solid #343B50;
+        background:#191E2B !important; color:var(--uh-text) !important;
+        font-weight:600; transition:border-color .15s ease, background .15s ease;
+    }
+    .stButton > button:hover {
+        border-color:var(--uh-primary) !important; color:#FFFFFF !important; background:#26213F !important;
+    }
+    .stButton > button:focus {
+        border-color:var(--uh-primary) !important;
+        box-shadow:0 0 0 2px rgba(163,148,255,.2);
+    }
+
+    [data-testid="stFileUploader"] {
+        background:#151925 !important; border:1px dashed #6255A0 !important;
+        border-radius:16px; padding:1rem;
+    }
+    [data-testid="stFileUploader"] section,
+    [data-testid="stFileUploader"] section > div { background:transparent !important; color:var(--uh-text) !important; }
+    [data-testid="stFileUploader"] label,
+    [data-testid="stFileUploader"] small,
+    [data-testid="stFileUploader"] span,
+    [data-testid="stFileUploader"] p { color:#C5CBD9 !important; }
+    [data-testid="stFileUploader"] button {
+        background:#29243F !important; border:1px solid #6255A0 !important; color:#F1EEFF !important;
+    }
+
+    [data-testid="stExpander"] {
+        background:var(--uh-surface) !important; border:1px solid var(--uh-border) !important;
+        border-radius:12px !important;
+    }
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary p { color:var(--uh-text) !important; }
+    [data-testid="stExpander"] details { background:transparent !important; }
 
     .source-card {
-        border-left: 4px solid #7c3aed;
-        background: rgba(124, 58, 237, 0.08);
-        padding: .7rem .9rem; border-radius: 8px; margin-bottom: .6rem;
-        font-size: .9rem;
+        background:#151925; border:1px solid #30364A; border-left:4px solid var(--uh-primary);
+        border-radius:12px; padding:1rem; margin:.65rem 0; color:#E4E7F0;
+        font-size:.91rem; line-height:1.7; overflow-wrap:anywhere;
     }
     .badge {
-        display: inline-block; padding: .1rem .55rem; border-radius: 999px;
-        background: #7c3aed; color: #fff; font-size: .72rem; font-weight: 600;
-        margin-right: .4rem;
+        display:inline-block; padding:.2rem .6rem; border-radius:7px;
+        background:#292343; color:#C4B9FF; font-size:.75rem; font-weight:750; margin-right:.4rem;
     }
-    div.stButton > button {
-        border-radius: 999px; border: 1px solid rgba(124,58,237,.5);
-        padding: .35rem .9rem; font-size: .85rem; width: 100%;
+    [data-testid="stAlert"] {
+        background:#171B27 !important; border:1px solid #343B50 !important;
+        color:var(--uh-text) !important; border-radius:12px;
     }
-    div.stButton > button:hover { border-color: #db2777; color: #db2777; }
-</style>
-""",
+    a { color:#B7AAFF !important; }
+    ::placeholder { color:#8992A8 !important; opacity:1; }
+
+    @media (max-width:900px) {
+        .block-container { padding:1.25rem 1rem 3rem; }
+        .uh-hero { padding:1.6rem; border-radius:18px; }
+        .uh-hero h1 { font-size:2rem; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+        *,*::before,*::after { transition-duration:.01ms !important; animation-duration:.01ms !important; }
+    }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
+# ---------------------------------------------------------------------------
+# Brand header
+# ---------------------------------------------------------------------------
 st.markdown(
     """
-<div class="hero">
-    <h1>🎓 UniHelp</h1>
-    <p>Your AI assistant for university rules, regulations and academic policies.
-       Upload the official policy PDF and get answers with page references.</p>
-</div>
-""",
+    <div class="uh-brand">
+      <div class="uh-brand-icon">🎓</div>
+      <div>
+        <div class="uh-brand-name">UniHelp</div>
+        <div class="uh-brand-caption">University knowledge assistant</div>
+      </div>
+    </div>
+    <div class="uh-hero">
+      <div class="uh-eyebrow">Your university, made easier to understand</div>
+      <h1>Find answers in your<br>university policies.</h1>
+      <p>Ask questions about academic regulations, admissions, examinations,
+      attendance and more. Get clear answers grounded in your uploaded official documents.</p>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
-# ----------------------------------------------------------------------------
-# API key (Streamlit Cloud secrets first, then .env / environment)
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# API key: Streamlit secrets first, then .env / environment
+# ---------------------------------------------------------------------------
 def get_api_key():
-    """Find GEMINI_API_KEY in st.secrets (top level or inside a section) or env."""
     try:
         if "GEMINI_API_KEY" in st.secrets:
             key = str(st.secrets["GEMINI_API_KEY"]).strip()
             if key:
                 return key
-        # Fallback: key accidentally placed under a [section]
         for value in st.secrets.values():
             if hasattr(value, "get") and value.get("GEMINI_API_KEY"):
                 return str(value["GEMINI_API_KEY"]).strip()
     except Exception:
-        pass  # no secrets file (e.g. running locally) -> use env
+        pass
     return os.getenv("GEMINI_API_KEY", "").strip() or None
 
 
 API_KEY = get_api_key()
 
-# ----------------------------------------------------------------------------
-# University-policy document check
-# ----------------------------------------------------------------------------
 POLICY_KEYWORDS = [
     "university", "student", "semester", "examination", "admission",
     "regulation", "degree", "credit hour", "attendance", "grading", "gpa",
@@ -113,19 +265,15 @@ POLICY_KEYWORDS = [
 
 def looks_like_university_policy(full_text):
     lower = full_text.lower()
-    counts = {k: lower.count(k) for k in POLICY_KEYWORDS}
-    distinct = sum(1 for v in counts.values() if v > 0)
+    counts = {word: lower.count(word) for word in POLICY_KEYWORDS}
+    distinct = sum(count > 0 for count in counts.values())
     total = sum(counts.values())
     return distinct >= 6 and total >= 25, distinct, total
 
 
-# ----------------------------------------------------------------------------
-# PDF processing (cached so it does not re-run on every chat message)
-# ----------------------------------------------------------------------------
 @st.cache_resource(show_spinner=False)
 def build_index(file_bytes: bytes):
     reader = PdfReader(io.BytesIO(file_bytes))
-
     pages = []
     for number, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
@@ -135,8 +283,8 @@ def build_index(file_bytes: bytes):
     if not pages:
         return {"error": "no_text"}
 
-    full_text = " ".join(p["text"] for p in pages)
-    is_policy, distinct, total = looks_like_university_policy(full_text)
+    full_text = " ".join(page["text"] for page in pages)
+    is_policy, _, _ = looks_like_university_policy(full_text)
     if not is_policy:
         return {"error": "not_policy"}
 
@@ -151,9 +299,11 @@ def build_index(file_bytes: bytes):
                 chunks.append({"text": piece, "page": page["page"]})
             start += chunk_size - overlap
 
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
-    vectors = vectorizer.fit_transform([c["text"] for c in chunks])
+    if not chunks:
+        return {"error": "no_text"}
 
+    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+    vectors = vectorizer.fit_transform([chunk["text"] for chunk in chunks])
     return {
         "pages": pages,
         "chunks": chunks,
@@ -163,24 +313,20 @@ def build_index(file_bytes: bytes):
     }
 
 
-# ----------------------------------------------------------------------------
-# Retrieval + generation
-# ----------------------------------------------------------------------------
 MIN_RELEVANCE = 0.04
-
-# Newest first. Optionally override with GEMINI_MODEL in secrets/.env.
 MODEL_CANDIDATES = [
     "gemini-3.8-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
     "gemini-flash-latest",
 ]
 try:
-    _custom = st.secrets.get("GEMINI_MODEL") or os.getenv("GEMINI_MODEL")
+    custom_model = st.secrets.get("GEMINI_MODEL") or os.getenv("GEMINI_MODEL")
 except Exception:
-    _custom = os.getenv("GEMINI_MODEL")
-if _custom:
-    MODEL_CANDIDATES.insert(0, str(_custom).strip())
+    custom_model = os.getenv("GEMINI_MODEL")
+if custom_model:
+    MODEL_CANDIDATES.insert(0, str(custom_model).strip())
 
 
 def retrieve_chunks(index, question, k=4):
@@ -193,19 +339,18 @@ def retrieve_chunks(index, question, k=4):
             "page": index["chunks"][i]["page"],
             "score": float(scores[i]),
         }
-        for i in best
-        if scores[i] > 0
+        for i in best if scores[i] > 0
     ]
 
 
 def generate_answer(question, results, history):
     context = "\n".join(
-        f"[PDF page {r['page']}]\n{r['text']}\n" for r in results
+        f"[PDF page {result['page']}]\n{result['text']}\n" for result in results
     )
     convo = "\n".join(
-        f"{m['role'].capitalize()}: {m['content']}" for m in history[-4:]
+        f"{message['role'].capitalize()}: {message['content']}"
+        for message in history[-4:]
     )
-
     prompt = f"""You are UniHelp, an assistant that answers questions ONLY about
 the university rules, regulations and academic policies contained in the
 excerpts below.
@@ -230,26 +375,40 @@ Student's question:
 {question}
 """
     client = genai.Client(api_key=API_KEY)
-
-    # Try models in order; if one is retired/unavailable (404), try the next.
+    retryable = (
+        "404", "NOT_FOUND", "503", "UNAVAILABLE", "500", "INTERNAL",
+        "429", "RESOURCE_EXHAUSTED", "overloaded",
+    )
     last_error = None
+
+    # Try the next model if a candidate is unavailable; retry transient errors once.
     for model_name in MODEL_CANDIDATES:
-        try:
-            response = client.models.generate_content(
-                model=model_name, contents=prompt
-            )
-            return response.text
-        except Exception as error:
-            last_error = error
-            if "404" in str(error) or "NOT_FOUND" in str(error):
-                continue  # model not available -> try next one
-            raise  # real problem (bad key, quota...) -> show it
-    raise last_error
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=model_name, contents=prompt
+                )
+                if not response.text:
+                    raise RuntimeError(f"{model_name} returned an empty response.")
+                return response.text
+            except Exception as error:
+                last_error = error
+                error_text = str(error).upper()
+                if not any(code.upper() in error_text for code in retryable):
+                    raise
+                if "404" in error_text or "NOT_FOUND" in error_text:
+                    break
+                if attempt == 0:
+                    time.sleep(1.5)
+
+    raise RuntimeError(
+        "All configured Gemini models failed. Last error: "
+        + (str(last_error)[:300] if last_error else "No model was available.")
+    )
 
 
 def answer_question(index, question):
     results = retrieve_chunks(index, question)
-
     if not results or results[0]["score"] < MIN_RELEVANCE:
         return (
             "I couldn't find anything about that in the uploaded policy document. "
@@ -262,8 +421,8 @@ def answer_question(index, question):
     if not API_KEY:
         return (
             "⚠️ The Gemini API key is not configured. Add `GEMINI_API_KEY` in "
-            "**Manage app → Settings → Secrets**. Meanwhile, here are the most "
-            "relevant passages from your PDF.",
+            "**Manage app → Settings → Secrets** (or your local `.env` file). "
+            "Meanwhile, here are the most relevant passages from your PDF.",
             results,
         )
 
@@ -281,50 +440,78 @@ def render_sources(sources):
     if not sources:
         return
     with st.expander(f"📚 View {len(sources)} source passages"):
-        for s in sources:
+        for source in sources:
+            safe_text = source["text"][:600].replace("\n", " ")
             st.markdown(
-                f"<div class='source-card'><span class='badge'>Page {s['page']}</span>"
-                f"<span style='opacity:.6'>match {s['score']:.2f}</span><br>"
-                f"{s['text'][:600].replace(chr(10), ' ')}…</div>",
+                f"<div class='source-card'><span class='badge'>Page {source['page']}</span>"
+                f"<span style='opacity:.6'>match {source['score']:.2f}</span><br>"
+                f"{safe_text}…</div>",
                 unsafe_allow_html=True,
             )
 
 
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Sidebar
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 with st.sidebar:
-    st.header("⚙️ Status")
-    if API_KEY:
-        st.success("Gemini API key detected")
-    else:
-        st.error("Gemini API key missing")
-        st.caption(
-            "Streamlit Cloud: Manage app → Settings → Secrets:\n\n"
-            '`GEMINI_API_KEY = "your-key"`'
-        )
+    st.markdown("### Your workspace")
+    st.caption("Manage your university documents")
     st.divider()
-    st.subheader("How it works")
-    st.markdown(
-        "1. Upload the official policy PDF\n"
-        "2. UniHelp finds the most relevant passages\n"
-        "3. Gemini answers using **only** those passages\n"
-        "4. Every answer shows its sources"
+    st.markdown("**📄 Knowledge source**")
+    st.caption("Upload an official university handbook, academic policy, or regulations PDF.")
+    uploaded_file = st.file_uploader(
+        "Choose a policy PDF",
+        type=["pdf"],
+        key="policy_pdf_upload",
+        help="Upload a text-based PDF containing university policies.",
     )
+    if uploaded_file is not None:
+        st.success("Document selected")
+        st.caption(uploaded_file.name)
     st.divider()
-    if st.button("🗑️ Clear chat"):
+    with st.expander("How UniHelp works"):
+        st.markdown(
+            """
+            **01 — Upload**
+
+            Select an official university policy PDF.
+
+            **02 — Search**
+
+            UniHelp finds relevant passages.
+
+            **03 — Ask**
+
+            Gemini generates an answer grounded in the retrieved passages.
+
+            **04 — Verify**
+
+            Review the cited source passages and page numbers.
+            """
+        )
+    if st.button("Clear conversation", key="clear_conversation", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
-# ----------------------------------------------------------------------------
-# Upload
-# ----------------------------------------------------------------------------
-uploaded_file = st.file_uploader(
-    "Upload your university rules & regulations (PDF)", type=["pdf"]
-)
 
+# ---------------------------------------------------------------------------
+# Validate and index the uploaded PDF
+# ---------------------------------------------------------------------------
 if uploaded_file is None:
-    st.info("📄 Upload a university policy PDF to start asking questions.")
+    st.markdown(
+        """
+        <div class="uh-document">
+          <div class="uh-document-icon">📄</div>
+          <div>
+            <div class="uh-document-name">No document selected yet</div>
+            <div class="uh-document-caption">
+              Upload your university policy PDF from the left sidebar to start asking questions.
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.stop()
 
 try:
@@ -335,34 +522,19 @@ except Exception as error:
     st.stop()
 
 if index.get("error") == "no_text":
-    st.error(
-        "No readable text found. This looks like a scanned PDF — please upload "
-        "a text-based PDF."
-    )
+    st.error("No readable text found. This may be a scanned PDF; please upload a text-based PDF.")
     st.stop()
-
 if index.get("error") == "not_policy":
     st.error(
         "🚫 This doesn't look like a university rules/policy document. "
-        "UniHelp only works with university regulations, handbooks and academic "
-        "policy PDFs. Please upload the correct file."
+        "UniHelp only works with university regulations, handbooks and academic policy PDFs. "
+        "Please upload the correct file."
     )
     st.stop()
 
-st.markdown(
-    f"""
-<div class="stat-row">
-    <div class="stat"><b>{index['total_pages']}</b><span>Pages</span></div>
-    <div class="stat"><b>{len(index['pages'])}</b><span>Readable</span></div>
-    <div class="stat"><b>{len(index['chunks'])}</b><span>Passages</span></div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
-
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Chat
-# ----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -378,16 +550,19 @@ if not st.session_state.messages:
         "How is GPA calculated?",
         "What happens in case of plagiarism?",
     ]
-    cols = st.columns(2)
-    for i, text in enumerate(suggestions):
-        if cols[i % 2].button(text, key=f"sugg_{i}"):
-            st.session_state.pending_question = text
+    columns = st.columns(2)
+    for i, suggestion in enumerate(suggestions):
+        if columns[i % 2].button(suggestion, key=f"sugg_{i}"):
+            st.session_state.pending_question = suggestion
             st.rerun()
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🧑‍🎓" if msg["role"] == "user" else "🎓"):
-        st.markdown(msg["content"])
-        render_sources(msg.get("sources"))
+for message in st.session_state.messages:
+    with st.chat_message(
+        message["role"],
+        avatar="🧑‍🎓" if message["role"] == "user" else "🎓",
+    ):
+        st.markdown(message["content"])
+        render_sources(message.get("sources", []))
 
 question = st.chat_input("Ask about university rules...")
 if "pending_question" in st.session_state:
@@ -396,7 +571,6 @@ if "pending_question" in st.session_state:
 if question:
     with st.chat_message("user", avatar="🧑‍🎓"):
         st.markdown(question)
-
     with st.chat_message("assistant", avatar="🎓"):
         with st.spinner("Searching the policy document..."):
             answer, sources = answer_question(index, question)
