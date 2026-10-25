@@ -7,7 +7,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
 
+
+
 load_dotenv()
+
+# Automatically load Streamlit Cloud secrets into environment variables
+if "GEMINI_API_KEY" in st.secrets:
+  os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
 st.set_page_config(page_title="UniHelp RAG", page_icon="🎓")
 st.title("🎓 UniHelp — University Rules Chatbot")
